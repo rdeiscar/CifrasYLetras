@@ -1,0 +1,24 @@
+{
+  "name": "cifras-y-letras",
+  "version": "1.0.0",
+  "description": "Juego multijugador en tiempo real de Cifras y Letras",
+  "main": "server/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node test/unit.js && node test/client.js && node test/e2e.js",
+    "fetch-dictionary": "node scripts/fetch-dictionary.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "jsdom": "^24.0.0",
+    "socket.io-client": "^4.7.5"
+  },
+  "license": "MIT"
+}

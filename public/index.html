@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cifras y Letras</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Ctext%20y='0.9em'%20font-size='90'%3E%F0%9F%8E%AF%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div id="bg-float" aria-hidden="true"></div>
+  <div id="confetti" aria-hidden="true"></div>
+
+  <div id="login-screen">
+    <div class="login-card">
+      <div class="login-logo">Cifras<span>&amp;</span>Letras</div>
+      <p class="tagline">La sala de juego en tiempo real</p>
+      <input id="nickname" maxlength="20" placeholder="¿Cómo te llamas?" autocomplete="off" autofocus>
+      <button id="btn-join" class="btn primary big">Entrar en la sala</button>
+      <p id="login-error" class="login-error hidden"></p>
+    </div>
+  </div>
+
+  <div id="app" class="hidden">
+    <header class="topbar">
+      <div class="brand">Cifras<span>&amp;</span>Letras</div>
+      <div class="top-center">
+        <span id="room-name" class="room-name"></span>
+        <span id="round-badge" class="round-badge"></span>
+      </div>
+      <button id="mute-btn" class="mute-btn" type="button" title="Silenciar">🔊</button>
+      <div class="timer" id="timer">
+        <svg viewBox="0 0 40 40" class="timer-svg">
+          <circle class="timer-bg" cx="20" cy="20" r="17"></circle>
+          <circle class="timer-ring" id="timer-ring" cx="20" cy="20" r="17"></circle>
+        </svg>
+        <span id="timer-text" class="timer-text">--</span>
+      </div>
+    </header>
+
+    <div class="layout">
+      <main id="stage" class="stage"></main>
+      <aside id="leaderboard" class="leaderboard"></aside>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/sfx.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
