@@ -381,10 +381,13 @@
               )}</b> comience la partida…</p>`
         }
         <div class="notice">
-          <b>Reglas:</b> en LETRAS debes formar la palabra más larga posible (1 punto por letra).
-          En CIFRAS, acércate o clava el número objetivo con sumas, restas, multiplicaciones y
-          divisiones (10 pts exacto, 8 pts aproximación); con «(...) Cerrar grupo» guardas un
-          paréntesis con su resultado y lo reutilizas. En empate puntúan todos los implicados.
+          <b>Reglas:</b> en LETRAS debes formar la palabra más larga posible (1 punto por letra)
+          y las vocales o consonantes pueden repetirse. En CIFRAS, acércate o clava el número
+          objetivo con sumas, restas, multiplicaciones y divisiones (10 pts exacto, 8 pts
+          aproximación); puedes guardar varios resultados («＋ Guardar resultado»), el mejor cuenta.
+          Con «(...) Cerrar grupo» guardas un paréntesis y sigues operando con su resultado, pero
+          cada grupo se gasta una sola vez. En empate puntúan todos. Al acabar cada ronda, el
+          anfitrión pulsa «Siguiente ronda» cuando queráis para poder comentar la jugada.
         </div>
       </div>`;
   }
@@ -734,6 +737,7 @@
       value: 0,
       selected: null,
       groups: [],
+      attempts: [],
     };
   }
 
@@ -849,16 +853,43 @@
     const groupsRow =
       numbers.groups.length > 0
         ? `<div class="groups-row">
-             <div class="tray-label">Tus paréntesis · toca uno para seguir operando con su resultado</div>
+             <div class="tray-label">Tus paréntesis · toca uno para seguir operando con su resultado (se gasta una sola vez)</div>
              <div class="tiles-row">
                ${numbers.groups
                  .map(
                    (g) => `<div class="tile group-tile${
-                     chainUsesGroup(g.id) ? ' in-use' : ''
+                     chainUsesGroup(g.id)
+                       ? ' in-use'
+                       : groupConsumed(g.id)
+                       ? ' consumed'
+                       : ''
                    }" data-kind="group" data-value="${g.id}">
                      <span class="group-expr">${esc(fmtExpr(g.expr))}</span>
                      <span class="group-val">= ${g.value}</span>
                      <span class="remove" data-group="${g.id}">✕</span>
+                   </div>`
+                 )
+                 .join('')}
+             </div>
+           </div>`
+        : '';
+
+    const best = bestAttempt();
+    const attemptsRow =
+      numbers.attempts.length > 0
+        ? `<div class="attempts-row">
+             <div class="tray-label">Tus resultados · el más cercano al objetivo es el que puntúa</div>
+             <div class="tiles-row">
+               ${numbers.attempts
+                 .map(
+                   (a) => `<div class="tile attempt-tile${
+                     best && a.id === best.id ? ' best' : ''
+                   }" data-kind="attempt" data-value="${a.id}">
+                     <span class="group-expr">${esc(fmtExpr(a.expr))}</span>
+                     <span class="group-val">= ${a.value}${
+                     a.dist === 0 ? ' 🎯' : ` (dist. ${a.dist})`
+                   }</span>
+                     <span class="remove" data-attempt="${a.id}">✕</span>
                    </div>`
                  )
                  .join('')}
@@ -882,20 +913,31 @@
         </div>
 
         ${groupsRow}
+        ${attemptsRow}
 
         <div class="builder" data-drop="chain">
           ${chain}
         </div>
 
         <div class="result-box">
-          <div class="result-value">${numbers.start == null ? '—' : numbers.value}</div>
+          <div class="result-value">${
+            numbers.start == null
+              ? best
+                ? best.value
+                : '—'
+              : numbers.value
+          }</div>
           <div class="result-dist">${
             numbers.start == null
-              ? numbers.groups.length
+              ? best
+                ? best.dist === 0
+                  ? '🎯 Tu mejor resultado clava el objetivo: guárdalo o mejóralo'
+                  : `Mejor resultado guardado: distancia ${best.dist}`
+                : numbers.groups.length
                 ? 'Usa un paréntesis o un número para empezar'
                 : 'Empieza eligiendo un número'
               : dist === 0
-              ? '🎉 ¡Objetivo conseguido!'
+              ? '🎉 ¡Objetivo conseguido! Pulsa «＋ Guardar resultado»'
               : `Distancia: ${dist} del objetivo`
           }</div>
         </div>
@@ -910,13 +952,16 @@
         </div>
 
         <div class="action-row">
+          <button class="btn primary" data-action="save-attempt">＋ Guardar resultado</button>
           <button class="btn ghost" data-action="undo">↩ Deshacer</button>
           <button class="btn ghost" data-action="close-group">(...) Cerrar grupo</button>
           <button class="btn ghost" data-action="clear-number">Vaciar</button>
         </div>
         <p class="hint-text">La resta no puede dar negativo y la división debe ser exacta.
-           Cada número se usa una sola vez. Con «(...) Cerrar grupo» guardas la operación
-           como un paréntesis con su resultado y puedes reutilizarlo en otra.</p>
+           Cada número se usa una sola vez. Con «(...) Cerrar grupo» guardas un paréntesis
+           con su resultado para seguir operando (cada grupo se gasta una sola vez). Con
+           «＋ Guardar resultado» registras un intento y recuperas todos los números para
+           probar otro: puedes tener varios intentos, como varias palabras en LETRAS.</p>
       </div>`;
 
     const shown = numbers.start == null ? null : numbers.value;
@@ -995,6 +1040,10 @@
       toast('Ese paréntesis ya está en la operación', true);
       return;
     }
+    if (groupConsumed(gid)) {
+      toast('Ese paréntesis ya se usó: cada grupo se gasta una sola vez', true);
+      return;
+    }
     if (groupsOverlapInChain(gid)) {
       toast('Comparten números con la operación actual: no se pueden combinar', true);
       return;
@@ -1032,6 +1081,14 @@
   function groupLineage(gid) {
     const g = numbers.groups.find((x) => x.id === gid);
     return new Set([gid, ...((g && g.refs) || [])]);
+  }
+
+  /* Un grupo queda «gastado» cuando otro grupo lo ha absorbido como operando. */
+  function groupConsumed(gid) {
+    if (!numbers) return false;
+    return numbers.groups.some(
+      (x) => x.id !== gid && (x.refs || []).includes(gid)
+    );
   }
 
   function groupsOverlapInChain(gid) {
@@ -1155,6 +1212,55 @@
     sfx('clear');
   }
 
+  /* Guarda el resultado actual como intento y deja la mesa lista para otro. */
+  function saveAttempt() {
+    if (!numbers) return;
+    if (numbers.start == null) {
+      toast('Elige un número para empezar', true);
+      return;
+    }
+    if (numbers.attempts.length >= state.maxAttempts) {
+      toast(`Máximo ${state.maxAttempts} intentos por ronda`, true);
+      return;
+    }
+    const dist = Math.abs(numbers.value - state.roundTarget);
+    numbers.attempts.push({
+      id: uid(),
+      expr: buildExpr(),
+      value: numbers.value,
+      dist,
+    });
+    numbers.start = null;
+    numbers.steps = [];
+    numbers.pendingOp = null;
+    numbers.value = 0;
+    numbers.selected = null;
+    numbers.groups = [];
+    recomputeUsed();
+    renderStageOnly();
+    sendNumbers();
+    sfx(dist === 0 ? 'exact' : 'group');
+    if (dist === 0) confetti(36);
+    toast(`Intento guardado (= ${numbers.attempts[numbers.attempts.length - 1].value})`);
+  }
+
+  function deleteAttempt(aid) {
+    if (!numbers) return;
+    numbers.attempts = numbers.attempts.filter((a) => a.id !== aid);
+    renderStageOnly();
+    sendNumbers();
+    sfx('undo');
+  }
+
+  function bestAttempt() {
+    if (!numbers || !numbers.attempts.length) return null;
+    let best = numbers.attempts[0];
+    for (const a of numbers.attempts) {
+      if (a.dist < best.dist) best = a;
+    }
+    return best;
+  }
+
   function recomputeValue() {
     if (numbers.start == null) {
       numbers.value = 0;
@@ -1171,14 +1277,9 @@
 
   function sendNumbers() {
     if (!state || state.state !== 'playing' || state.roundType !== 'numbers') return;
-    if (numbers.start != null) {
-      socket.emit('submit_numbers', buildExpr());
-    } else if (numbers.groups.length === 1) {
-      const g = numbers.groups[0].expr;
-      socket.emit('submit_numbers', { start: g.start, steps: g.steps });
-    } else {
-      socket.emit('submit_numbers', { start: 0, steps: [] });
-    }
+    const exprs = numbers.attempts.map((a) => a.expr);
+    if (numbers.start != null) exprs.push(buildExpr());
+    socket.emit('submit_numbers', exprs);
   }
 
   function renderStageOnly() {
@@ -1243,7 +1344,9 @@
                    <td>${
                      e.ok
                        ? `<span class="answer-num">${e.value}</span>
-                          <div class="word-meta">${exprHtml(e.expr)}</div>`
+                          <div class="word-meta">${exprHtml(e.expr)}${
+                          e.attempts > 1 ? ` · ${e.attempts} intentos` : ''
+                        }</div>`
                        : '<span class="word-meta">sin resultado</span>'
                    }</td>
                    <td>${e.ok ? e.dist : '—'}</td>
@@ -1261,20 +1364,21 @@
     }
 
     const isLast = state.roundNumber >= state.totalRounds;
-    const next = Math.max(0, Math.ceil((state.resultsEnd - Date.now()) / 1000));
+    const isHost = me === state.hostId;
+    const nextControls = isHost
+      ? `<button class="btn primary" data-action="next-round">${
+          isLast ? '🏁 Terminar la partida' : '▶ Siguiente ronda'
+        }</button>`
+      : `<p class="waiting-note">Comentad la jugada… el anfitrión pasará a ${
+          isLast ? 'la clasificación final' : 'la siguiente ronda'
+        } cuando queráis.</p>`;
 
     stage.innerHTML = `
       <div class="panel">
         <h2 class="panel-title">🎉 Resultados · ${typeLabel(r.type)}</h2>
         ${table}
         ${notice}
-        <div class="next-round">
-          ${
-            isLast
-              ? 'Fin de la partida · clasificación en la tabla lateral'
-              : `Siguiente ronda en <b>${next}</b> s…`
-          }
-        </div>
+        <div class="next-round">${nextControls}</div>
       </div>`;
   }
 
@@ -1294,6 +1398,7 @@
     if (ev.target.closest('.remove')) return;
     const tile = ev.target.closest('.tile[data-kind]');
     if (!tile) return;
+    if (tile.dataset.kind === 'attempt') return;
     ev.preventDefault();
     drag = {
       kind: tile.dataset.kind,
@@ -1399,7 +1504,7 @@
       renderStageOnly();
     } else if (kind === 'group') {
       numbersGroupTap(value);
-    } else {
+    } else if (kind === 'number') {
       numbersTap(Number(value));
     }
   }
@@ -1411,7 +1516,7 @@
       else if (type === 'letters-new') placeLetter(value, '_new');
     } else if (kind === 'group') {
       numbersGroupTap(value);
-    } else {
+    } else if (kind === 'number') {
       numbersTap(Number(value));
     }
   }
@@ -1428,6 +1533,12 @@
     const removeGroup = ev.target.closest('.group-tile .remove');
     if (removeGroup) {
       deleteGroup(removeGroup.dataset.group);
+      return;
+    }
+
+    const removeAttempt = ev.target.closest('.attempt-tile .remove');
+    if (removeAttempt) {
+      deleteAttempt(removeAttempt.dataset.attempt);
       return;
     }
 
@@ -1450,8 +1561,10 @@
       else if (a === 'undo') numbersUndo();
       else if (a === 'clear-number') numbersClear();
       else if (a === 'close-group') closeGroup();
+      else if (a === 'save-attempt') saveAttempt();
       else if (a === 'start') socket.emit('start_game');
       else if (a === 'newgame') socket.emit('start_game');
+      else if (a === 'next-round') socket.emit('next_round');
       return;
     }
 

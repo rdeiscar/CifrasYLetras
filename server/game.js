@@ -25,25 +25,16 @@ function shuffle(a) {
   return a;
 }
 
-function weightedSample(items, weightOf, k) {
-  const pool = items.map((it) => ({ it, w: Math.max(0.0001, weightOf(it)) }));
-  const out = [];
-  for (let n = 0; n < k && pool.length; n++) {
-    let total = 0;
-    for (const p of pool) total += p.w;
-    let r = Math.random() * total;
-    let idx = pool.length - 1;
-    for (let i = 0; i < pool.length; i++) {
-      r -= pool[i].w;
-      if (r <= 0) {
-        idx = i;
-        break;
-      }
-    }
-    out.push(pool[idx].it);
-    pool.splice(idx, 1);
+/* Elige un elemento según su peso, permitiendo repetidos (con reemplazo). */
+function weightedPick(items, weightOf) {
+  let total = 0;
+  for (const it of items) total += Math.max(0.0001, weightOf(it));
+  let r = Math.random() * total;
+  for (const it of items) {
+    r -= Math.max(0.0001, weightOf(it));
+    if (r <= 0) return it;
   }
-  return out;
+  return items[items.length - 1];
 }
 
 function randint(lo, hi) {
@@ -291,6 +282,7 @@ class Game {
       roundNumbers: this.roundNumbers,
       roundTarget: this.roundTarget,
       minWordLength: this.cfg.MIN_WORD_LENGTH,
+      maxAttempts: this.cfg.MAX_NUMBER_ATTEMPTS,
       roundSeconds: this.cfg.ROUND_TIME_SECONDS,
       countdownSeconds: this.cfg.COUNTDOWN_SECONDS,
       resultsSeconds: this.cfg.RESULTS_SECONDS,
@@ -394,10 +386,16 @@ class Game {
       this._ticker = null;
     }
     this.state = 'results';
-    this.resultsEnd = Date.now() + this.cfg.RESULTS_SECONDS * 1000;
+    this.resultsEnd = 0;
     this.computeResults();
     this.broadcast();
-    setTimeout(() => this.nextRound(), this.cfg.RESULTS_SECONDS * 1000);
+  }
+
+  /* El anfitrión pasa manualmente a la siguiente ronda para poder comentar la jugada. */
+  advanceRound(byId) {
+    if (this.state !== 'results') return;
+    if (byId !== this.hostId) return;
+    this.nextRound();
   }
 
   endGame() {
@@ -460,17 +458,28 @@ class Game {
     const entries = [];
     for (const [id, p] of this.players) {
       const sub = this.submissions.get(id);
-      let ok = false;
-      let value = null;
-      let expr = null;
-      let dist = Infinity;
-      if (sub && sub.ok) {
-        ok = true;
-        value = sub.value;
-        expr = sub.expr;
-        dist = Math.abs(value - this.roundTarget);
+      const attempts = sub && Array.isArray(sub.attempts) ? sub.attempts : [];
+      let best = null;
+      for (const a of attempts) {
+        if (!a || a.value == null) continue;
+        const dist = Math.abs(a.value - this.roundTarget);
+        if (
+          !best ||
+          dist < best.dist ||
+          (dist === best.dist && a.value === this.roundTarget)
+        ) {
+          best = { value: a.value, expr: a.expr, dist };
+        }
       }
-      entries.push({ id, name: p.name, value, expr, dist, ok });
+      entries.push({
+        id,
+        name: p.name,
+        value: best ? best.value : null,
+        expr: best ? best.expr : null,
+        dist: best ? best.dist : Infinity,
+        ok: !!best,
+        attempts: attempts.length,
+      });
     }
     const exact = entries.filter((e) => e.ok && e.value === this.roundTarget);
     let winners = [];
@@ -510,22 +519,29 @@ class Game {
     if (ack) ack({ ok: true, count: list.length });
   }
 
-  submitNumbers(id, expr, ack) {
+  submitNumbers(id, payload, ack) {
     if (this.state !== 'playing' || this.roundType !== 'numbers') {
       if (ack) ack({ ok: false });
       return;
     }
-    const r = execExpression(this.roundNumbers, expr);
-    if (r.ok) {
-      this.submissions.set(id, {
-        ok: true,
-        value: r.value,
-        expr: normalizeExpr(expr),
-      });
-    } else {
-      this.submissions.delete(id);
+    const list = (Array.isArray(payload) ? payload : [payload]).slice(
+      0,
+      this.cfg.MAX_NUMBER_ATTEMPTS
+    );
+    const attempts = [];
+    for (const expr of list) {
+      const r = execExpression(this.roundNumbers, expr);
+      if (r.ok) attempts.push({ value: r.value, expr: normalizeExpr(expr) });
     }
-    if (ack) ack({ ok: r.ok, value: r.value });
+    this.submissions.set(id, { attempts });
+    const first = attempts[0];
+    if (ack) {
+      ack({
+        ok: attempts.length > 0,
+        value: first ? first.value : null,
+        count: attempts.length,
+      });
+    }
   }
 
   validateWord(word, ack) {
@@ -535,16 +551,15 @@ class Game {
   }
 
   drawLetters() {
-    const vowels = weightedSample(
-      VOWELS,
-      (ch) => VOWEL_WEIGHTS[ch] || 1,
-      this.cfg.VOWELS_PER_ROUND
-    );
-    const consonants = weightedSample(
-      CONSONANTS,
-      (ch) => CONSONANT_WEIGHTS[ch] || 1,
-      this.cfg.NUM_LETTERS - this.cfg.VOWELS_PER_ROUND
-    );
+    const vowels = [];
+    for (let i = 0; i < this.cfg.VOWELS_PER_ROUND; i++) {
+      vowels.push(weightedPick(VOWELS, (ch) => VOWEL_WEIGHTS[ch] || 1));
+    }
+    const consonantCount = this.cfg.NUM_LETTERS - this.cfg.VOWELS_PER_ROUND;
+    const consonants = [];
+    for (let i = 0; i < consonantCount; i++) {
+      consonants.push(weightedPick(CONSONANTS, (ch) => CONSONANT_WEIGHTS[ch] || 1));
+    }
     return shuffle([...vowels, ...consonants]);
   }
 

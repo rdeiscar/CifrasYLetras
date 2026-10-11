@@ -84,6 +84,7 @@ const config = require(path.join(process.cwd(), 'server', 'config'));
   }
 
   const counts = {};
+  let repeats = 0;
   const LETTER_DRAWS = 4000;
   for (let i = 0; i < LETTER_DRAWS; i++) {
     const L = Game.prototype.drawLetters.call({ cfg: config });
@@ -93,9 +94,10 @@ const config = require(path.join(process.cwd(), 'server', 'config'));
       config.VOWELS_PER_ROUND,
       'exactamente ' + config.VOWELS_PER_ROUND + ' vocales'
     );
-    assert.strictEqual(new Set(L).size, L.length, 'letras sin repetir: ' + L.join(''));
+    if (new Set(L).size < L.length) repeats++;
     for (const c of L) counts[c] = (counts[c] || 0) + 1;
   }
+  assert.ok(repeats > 0, 'las letras pueden repetirse');
   const wxc = (counts.W || 0) + (counts.X || 0);
   const sc = counts.S || 0;
   console.log('frecuencias: S=' + sc + ' N=' + (counts.N || 0) + ' W=' + (counts.W || 0) + ' X=' + (counts.X || 0) + ' Z=' + (counts.Z || 0));
@@ -108,6 +110,22 @@ const config = require(path.join(process.cwd(), 'server', 'config'));
   assert.strictEqual(sol.dist, Math.abs(sol.value - 428));
   assert.strictEqual(sol.exact, sol.value === 428);
   console.log('solver output:', sol.value, '|', sol.expr, '| dist', sol.dist);
+
+  const g = new Game(config, dictionary, { to: () => ({ emit() {} }) });
+  g.players.set('p1', { id: 'p1', name: 'Ana', score: 0, connected: true });
+  g.roundType = 'numbers';
+  g.roundTarget = 100;
+  g.submissions.set('p1', {
+    attempts: [
+      { value: 90, expr: { start: 90, steps: [] } },
+      { value: 100, expr: { start: 100, steps: [] } },
+      { value: 105, expr: { start: 105, steps: [] } },
+    ],
+  });
+  g.computeNumbersResults();
+  assert.strictEqual(g.results.rows[0].value, 100, 'se elige el intento exacto');
+  assert.strictEqual(g.results.rows[0].dist, 0);
+  assert.strictEqual(g.players.get('p1').score, config.POINTS_EXACT);
 
   console.log('UNIT OK');
 })().catch((e) => {

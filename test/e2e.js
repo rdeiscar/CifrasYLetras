@@ -142,6 +142,8 @@ async function sleep(ms) {
   }
   check('bestWords visibles en resultados', Array.isArray(st.bestWords));
 
+  A.s.emit('next_round');
+
   // ---- ronda 2: CIFRAS, solo A juega ----
   st = await waitState(A.s, (s) => s.state === 'playing' && s.roundType === 'numbers' && s.roundNumber === 2);
   const n1 = st.roundNumbers[0];
@@ -162,6 +164,8 @@ async function sleep(ms) {
   aRow.points === 10 ? (expected['t-aaa'] += 10) : (expected['t-aaa'] += 8);
   check('solución de cifras visibles en resultados', st.solution && st.solution.value != null);
 
+  A.s.emit('next_round');
+
   // ---- ronda 3: LETRAS, solo B juega ----
   st = await waitState(A.s, (s) => s.state === 'playing' && s.roundType === 'letters' && s.roundNumber === 3);
   const w3 = bestBuildable(st.roundLetters, st.minWordLength);
@@ -171,6 +175,8 @@ async function sleep(ms) {
   const b3 = st.results.rows.find((e) => e.name === 'Beto');
   check('ronda 3: solo Beto puntúa', a3.points === 0 && b3.points === (w3 ? w3.length : 0));
   if (w3) expected['t-bbb'] += w3.length;
+
+  A.s.emit('next_round');
 
   // ---- ronda 4: CIFRAS, los dos ----
   st = await waitState(A.s, (s) => s.state === 'playing' && s.roundType === 'numbers' && s.roundNumber === 4);
@@ -192,6 +198,8 @@ async function sleep(ms) {
     }
   }
   check('ronda 4: al menos un ganador en cifras', st.results.rows.some((e) => e.points > 0));
+
+  A.s.emit('next_round');
 
   // ---- fin de partida ----
   st = await waitState(A.s, (s) => s.state === 'gameover', 50000);

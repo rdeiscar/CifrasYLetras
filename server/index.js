@@ -41,6 +41,11 @@ io.on('connection', (socket) => {
     if (token) game.startGame(token);
   });
 
+  socket.on('next_round', () => {
+    const token = game.socketMap.get(socket.id);
+    if (token) game.advanceRound(token);
+  });
+
   socket.on('validate_word', (word, ack) => game.validateWord(word, ack));
 
   socket.on('submit_words', (words, ack) => {

@@ -85,6 +85,7 @@ fire('state', {
   totalRounds: 8,
   roundNumbers: ROUND_NUMBERS,
   roundTarget: 300,
+  maxAttempts: 10,
   roundSeconds: 60,
   roundEnd: Date.now() + 60000,
   countdownSeconds: 5,
@@ -126,7 +127,16 @@ const lastSub = () => {
   }
   return null;
 };
-const submitValue = () => execExpression(ROUND_NUMBERS, lastSub() || { start: 0, steps: [] });
+const lastSubList = () => {
+  const s = lastSub();
+  if (Array.isArray(s)) return s;
+  return s ? [s] : [];
+};
+const submitValue = () => {
+  const list = lastSubList();
+  const expr = list.length ? list[list.length - 1] : { start: 0, steps: [] };
+  return execExpression(ROUND_NUMBERS, expr);
+};
 
 function tap(el) {
   const o = { bubbles: true, cancelable: true, clientX: 5, clientY: 5, button: 0 };
@@ -175,15 +185,14 @@ check('segundo grupo "= 7"', groupTiles()[1].textContent.includes('= 7'));
 check('pool en 3 con dos grupos', poolTiles().length === 3, poolTiles().length);
 
 tap(groupTiles()[0]);
-check('primer grupo reutilizable con el segundo guardado', resultValue() === '1', resultValue());
-click(op('+'));
-tap(groupTiles()[1]);
-check('combinarlos que comparten números queda bloqueado', resultValue() === '1', resultValue());
 check(
-  'la cadena no cambió al bloquear (sigue solo el primer grupo)',
-  resultValue() === '1' && chainCompact().split('(4−3)').length === 2,
-  chainText()
+  'un paréntesis ya usado no se puede reutilizar',
+  chainText().includes('paréntesis') && resultValue() === '—',
+  chainText() + ' | ' + resultValue()
 );
+tap(groupTiles()[1]);
+check('el paréntesis nuevo sí se puede usar', resultValue() === '7', resultValue());
+check('pool en 3 usando el paréntesis nuevo', poolTiles().length === 3, poolTiles().length);
 
 click(action('clear-number'));
 check('vaciar deja los grupos y libera la cadena', groupTiles().length === 2 && chainText().includes('paréntesis'), chainText());
@@ -214,6 +223,32 @@ check('servidor acepta (4 − 3) × (6 + 8) = 14', r.ok && r.value === 14, JSON.
 
 tap(groupTiles()[0]);
 check('no deja repetir el mismo paréntesis en la cadena', chainText().split('(4 − 3)').length === 2, chainText());
+
+/* ---------------- varios intentos ---------------- */
+
+click(action('clear-number'));
+tap(numTile(25));
+click(op('+'));
+tap(numTile(10));
+click(action('save-attempt'));
+check('guardar resultado crea un intento', $$('.attempt-tile').length === 1, $$('.attempt-tile').length);
+check('al guardar se recuperan todos los números', poolTiles().length === 6, poolTiles().length);
+check('el resultado actual se vacía y muestra el mejor guardado', resultValue() === '35', resultValue());
+
+tap(numTile(25));
+click(op('×'));
+tap(numTile(10));
+click(action('save-attempt'));
+check('se pueden guardar varios intentos', $$('.attempt-tile').length === 2, $$('.attempt-tile').length);
+check('el mejor intento se resalta', $$('.attempt-tile.best').length === 1, $$('.attempt-tile.best').length);
+check(
+  'se envían todos los intentos al servidor',
+  lastSubList().length === 2 && submitValue().ok,
+  JSON.stringify(lastSubList())
+);
+
+click($$('.attempt-tile')[1].querySelector('.remove'));
+check('se puede borrar un intento', $$('.attempt-tile').length === 1, $$('.attempt-tile').length);
 
 /* ---------------- escenario LETRAS: la bandeja se vacía y se restaura ---------------- */
 

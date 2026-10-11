@@ -4,18 +4,25 @@ Juego multijugador en tiempo real: login rápido con un nombre, una sala común 
 todos los jugadores conectados, y partidas de **Letras** y **Cifras** alternas.
 
 - **Letras**: aparecen 10 letras (4 vocales), sorteadas por frecuencia real
-  (W y X salen muy de vez en cuando). Forma la palabra más larga que exista
-  en el diccionario. 1 punto por letra. Gana la más larga; en empate puntúan todos.
+  (W y X salen muy de vez en cuando); las vocales o consonantes **pueden repetirse**.
+  Forma la palabra más larga que exista en el diccionario. 1 punto por letra.
+  Gana la más larga; en empate puntúan todos.
 - **Cifras**: 6 números distintos (del 1 al 10 y 25/50/75/100) y un objetivo entre 100 y 999.
   Con sumas, restas, multiplicaciones y divisiones acércate al objetivo en 60 s.
+  Puedes guardar **varios resultados** (como varias palabras en Letras): puntúa el mejor.
   **10 puntos** si lo clavas, **8** si eres el más cercano; en empate puntúan todos.
 - Los jugadores arrastran las letras/números con el ratón y el cálculo es automático.
 - En letras puedes formar varias palabras: puntúa la más larga que seas capaz. La bandeja
   muestra solo las letras que te quedan para la palabra en curso; **＋ Nueva palabra**
   las restaura todas.
+- En cifras puedes guardar varios intentos con **＋ Guardar resultado**; cada intento
+  recupera todos los números. **(...) Cerrar grupo** guarda un paréntesis para seguir
+  operando con su resultado, pero cada grupo se gasta una sola vez.
 - Sonidos sintetizados (sin ficheros) con botón de silencio 🔊 en la cabecera,
   confeti al puntuar y a lo grande si ganas la partida.
-- Cada ronda dura 60 s (configurable) con cuenta atrás animada.
+- Cada ronda dura 60 s (configurable) con cuenta atrás animada. Al terminar, los
+  resultados **no** pasan solos: el anfitrión pulsa **Siguiente ronda** cuando queráis,
+  para poder comentar la jugada.
 
 ## Requisitos
 
@@ -86,6 +93,7 @@ PORT=3000 node server/index.js
 | `MIN_WORD_LENGTH`     | `3`     | Longitud mínima de palabra válida              |
 | `VOWELS_PER_ROUND`    | `4`     | Vocales en cada ronda de letras                |
 | `NUM_NUMBERS`         | `6`     | Cifras por ronda de cifras                     |
+| `MAX_NUMBER_ATTEMPTS` | `10`    | Resultados distintos por jugador en cifras     |
 | `POINTS_EXACT`        | `10`    | Puntos por clavar el objetivo                  |
 | `POINTS_CLOSE`        | `8`     | Puntos por la aproximación más cercana         |
 | `DICTIONARY_FILE`     | `data/palabras.txt` | Ruta del diccionario            |
@@ -102,9 +110,12 @@ PORT=3000 node server/index.js
 3. **Cifras**: elige números y operaciones; el valor y la distancia al objetivo se
    calculan solos. La resta no puede dar negativo y la división debe ser exacta.
    Con **(...) Cerrar grupo** cierras un paréntesis: queda guardado con su resultado
-   y puedes tocarlo para usarlo en otra operación (p. ej. `4−3=1` y seguir con ese 1).
-4. Al terminar cada ronda se muestran los resultados y los puntos; después arranca la
-   siguiente (se alternan Letras y Cifras). Al final, clasificación completa.
+   y puedes tocarlo para usarlo en otra operación (p. ej. `4−3=1` y seguir con ese 1);
+   cada grupo se gasta una sola vez, igual que los números. Con **＋ Guardar resultado**
+   registras el intento actual y recuperas todos los números para probar otro.
+4. Al terminar cada ronda se muestran los resultados y los puntos; el anfitrión pulsa
+   **Siguiente ronda** cuando queráis (así se puede comentar la jugada). Se alternan
+   Letras y Cifras. Al final, clasificación completa.
 
 ## Notas técnicas
 
